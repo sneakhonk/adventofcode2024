@@ -37,6 +37,26 @@ uint32_t get_number(const char* data) {
     return (uint32_t)number;
 }
 
+size_t count_all_occurrences(uint32_t *sorted_list, size_t list_size, uint32_t key) {
+    uint32_t *found = (uint32_t *)bsearch(&key, sorted_list, list_size, sizeof(uint32_t), uint32_t_compare);
+    if (found == NULL) {
+        return 0;
+    }
+
+    size_t index = found - sorted_list;
+    size_t count = 1;
+
+    for (ssize_t i = index - 1; i >= 0 && sorted_list[i] == key; --i) {
+        count++;
+    }
+
+    for (size_t i = index + 1; i < list_size && sorted_list[i] == key; ++i) {
+        count++;
+    }
+
+    return count;
+}
+
 int main() {
     int fd;
     struct stat st;
@@ -45,7 +65,8 @@ int main() {
     char *data;
     uint32_t *first_list;
     uint32_t *second_list;
-    size_t sum;
+    size_t first_star;
+    size_t second_star;
 
     fd = open("input", O_RDONLY);
     if (fd == -1) {
@@ -95,15 +116,18 @@ int main() {
     qsort(first_list, listsize, sizeof(uint32_t), uint32_t_compare);
     qsort(second_list, listsize, sizeof(uint32_t), uint32_t_compare);
 
-    sum = 0;
+    first_star = 0;
+    second_star = 0;
     for (size_t i = 0; i < listsize; ++i) {
+        second_star += count_all_occurrences(second_list, listsize, first_list[i]) * first_list[i];
         if (first_list[i] > second_list[i])
-            sum += (first_list[i] - second_list[i]);
+            first_star += (first_list[i] - second_list[i]);
         else
-            sum += (second_list[i] - first_list[i]);
+            first_star += (second_list[i] - first_list[i]);
     }
 
-    printf("%zu\n", sum);
+    printf("First star: %zu\n", first_star);
+    printf("Second star: %zu\n", second_star);
 
     munmap(data, filesize);
     close(fd);
