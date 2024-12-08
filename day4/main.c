@@ -12,18 +12,46 @@
 #define WORD "XMAS"
 #define WORD_LEN 4
 
-#define CHECK_DIR(r, c, dr, dc) ({ \
-    int found = 1; \
-    for (int k = 0; k < WORD_LEN; k++) { \
-        int rr = (r) + (dr)*k; \
-        int cc = (c) + (dc)*k; \
-        if (rr < 0 || rr >= rows || cc < 0 || cc >= cols || grid[rr][cc] != WORD[k]) { \
-            found = 0; \
-            break; \
-        } \
-    } \
-    found; \
-})
+static int rows, cols;
+static char **grid;
+
+static int check_word(int r, int c, int dr, int dc) {
+    for (int k = 0; k < WORD_LEN; k++) {
+        int rr = r + dr * k;
+        int cc = c + dc * k;
+        if (rr < 0 || rr >= rows || cc < 0 || cc >= cols || grid[rr][cc] != WORD[k]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int check_x_pattern(int r, int c) {
+    // The cell must be 'A'
+    if (grid[r][c] != 'A') {
+        return 0;
+    }
+
+    // Check that diagonals exist
+    if (r - 1 < 0 || r + 1 >= rows || c - 1 < 0 || c + 1 >= cols) {
+        return 0;
+    }
+
+    // Diagonal cells:
+    char tl = grid[r-1][c-1]; // top-left
+    char tr = grid[r-1][c+1]; // top-right
+    char bl = grid[r+1][c-1]; // bottom-left
+    char br = grid[r+1][c+1]; // bottom-right
+
+    // We need one diagonal pair to contain 'M' and 'S' in any order:
+    // Check first diagonal pair (top-left and bottom-right)
+    int diag1 = ((tl == 'M' && br == 'S') || (tl == 'S' && br == 'M'));
+
+    // Check second diagonal pair (top-right and bottom-left)
+    int diag2 = ((tr == 'M' && bl == 'S') || (tr == 'S' && bl == 'M'));
+
+    return (diag1 && diag2) ? 1 : 0;
+}
 
 int main() {
     int fd;
@@ -51,11 +79,11 @@ int main() {
         exit(EXIT_FAILURE); 
     }
 
-    int rows = 0;
-    int cols = -1;
-
+    // Determine rows and cols
     {
         int current_len = 0;
+        cols = -1;
+        rows = 0;
         for (size_t i = 0; i < filesize; i++) {
             if (data[i] == '\n') {
                 rows++;
@@ -64,6 +92,7 @@ int main() {
                 } else if (current_len != cols) {
                     munmap(data, filesize);
                     close(fd);
+                    fprintf(stderr, "Inconsistent column length\n");
                     exit(EXIT_FAILURE);
                 }
                 current_len = 0;
@@ -80,6 +109,7 @@ int main() {
             else if (current_len != cols) {
                 munmap(data, filesize);
                 close(fd);
+                fprintf(stderr, "Inconsistent column length at end\n");
                 exit(EXIT_FAILURE);
             }
         }
@@ -91,7 +121,7 @@ int main() {
         return 0;
     }
 
-    char **grid = malloc(rows * sizeof(char *));
+    grid = malloc(rows * sizeof(char *));
     if (!grid) {
         perror("malloc");
         munmap(data, filesize);
@@ -132,6 +162,8 @@ int main() {
     }
 
     int found_count = 0;
+    int x_count = 0;
+
     int directions[8][2] = {
         {0,1},   // right
         {0,-1},  // left
@@ -143,13 +175,14 @@ int main() {
         {-1,-1}  // up-left
     };
 
+    // Find occurrences of WORD
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             if (grid[r][c] == WORD[0]) {
                 for (int d = 0; d < 8; d++) {
                     int dr = directions[d][0];
                     int dc = directions[d][1];
-                    if (CHECK_DIR(r, c, dr, dc)) {
+                    if (check_word(r, c, dr, dc)) {
                         found_count++;
                     }
                 }
@@ -157,7 +190,20 @@ int main() {
         }
     }
 
+    // M-S
+    // -A-
+    // M-S
+    // Find "X" patterns with 'A' in center and diagonals being 'M' and 'S'
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            if (check_x_pattern(r, c)) {
+                x_count++;
+            }
+        }
+    }
+
     printf("First star: %d\n", found_count);
+    printf("Second star: %d\n", x_count);
 
     for (int r = 0; r < rows; r++) {
         free(grid[r]);
